@@ -14,15 +14,31 @@ class OCRService {
    * @param {string} imagePath - Path to the uploaded image
    * @returns {Object} Extracted expense data
    */
-  async extractExpenseData(imagePath) {
+  async extractExpenseData(filePath) {
     try {
-      // Read the image file
-      const imageBuffer = fs.readFileSync(imagePath);
-      const base64Image = imageBuffer.toString('base64');
+      console.log('🔍 OCR Service: Starting extraction for file:', filePath);
+      
+      // Check if API key exists
+      if (!this.geminiApiKey) {
+        console.error('❌ OCR Service: GEMINI_API_KEY not found in environment variables');
+        throw new Error('Gemini API key not configured');
+      }
+      
+      console.log('✅ OCR Service: API key found, length:', this.geminiApiKey.length);
+      
+      // Read the file
+      const fileBuffer = fs.readFileSync(filePath);
+      const base64File = fileBuffer.toString('base64');
+      
+      // Determine MIME type based on file extension
+      const mimeType = this.getMimeType(filePath);
+      
+      console.log(`📄 OCR Service: Processing file - Path: ${filePath}, MIME type: ${mimeType}, Buffer size: ${fileBuffer.length} bytes`);
 
       // Prepare the prompt for expense data extraction
+      const fileType = mimeType.includes('pdf') ? 'PDF document' : 'image';
       const prompt = `
-        Analyze this receipt image and extract the following information in JSON format:
+        Analyze this receipt ${fileType} and extract the following information in JSON format:
         {
           "amount": number (total amount),
           "currency": string (currency code like USD, EUR, INR),
@@ -42,33 +58,71 @@ class OCRService {
         - Return only valid JSON, no additional text
       `;
 
-      // Call Gemini Vision API
-      const response = await axios.post(
-        `${this.geminiApiUrl}/models/gemini-pro-vision:generateContent?key=${this.geminiApiKey}`,
-        {
-          contents: [{
-            parts: [
-              { text: prompt },
-              {
-                inline_data: {
-                  mime_type: 'image/jpeg',
-                  data: base64Image
-                }
-              }
-            ]
-          }]
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          }
+      // Test API connectivity first
+      console.log('🔍 OCR Service: Testing API connectivity...');
+      try {
+        const testUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${this.geminiApiKey}`;
+        const testResponse = await axios.get(testUrl);
+        console.log('✅ OCR Service: API connectivity successful');
+        console.log('📋 Available models:', testResponse.data.models?.map(m => m.name).slice(0, 3) || 'No models found');
+      } catch (testError) {
+        console.log('❌ OCR Service: API connectivity test failed:', testError.message);
+        if (testError.response) {
+          console.log('📋 Test error details:', testError.response.data);
         }
-      );
+      }
+
+      // Prepare API request - Using available Gemini model with vision capabilities
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${this.geminiApiKey}`;
+      const requestPayload = {
+        contents: [{
+          parts: [
+            { text: prompt },
+            {
+              inline_data: {
+                mime_type: mimeType,
+                data: base64File
+              }
+            }
+          ]
+        }]
+      };
+      
+      console.log('🌐 OCR Service: Making API request to:', apiUrl.replace(this.geminiApiKey, 'API_KEY_HIDDEN'));
+      console.log('📤 OCR Service: Request payload structure:', {
+        contents: [{
+          parts: [
+            { text: 'PROMPT_TEXT' },
+            { inline_data: { mime_type: mimeType, data: `BASE64_DATA_${base64File.length}_CHARS` } }
+          ]
+        }]
+      });
+
+      // Call Gemini Vision API
+      const response = await axios.post(apiUrl, requestPayload, {
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      console.log('📥 OCR Service: API Response Status:', response.status);
+      console.log('📥 OCR Service: Full API Response:', JSON.stringify(response.data, null, 2));
 
       // Parse the response
       const generatedText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
       
+      console.log('🔄 OCR Service: Parsing response...');
+      console.log('📝 OCR Service: Generated text from Gemini:', generatedText);
+      
       if (!generatedText) {
+        console.error('❌ OCR Service: No generated text in response');
+        console.error('📋 OCR Service: Response structure:', JSON.stringify({
+          candidates: response.data?.candidates?.length || 0,
+          candidatesStructure: response.data?.candidates?.map(c => ({
+            content: !!c.content,
+            parts: c.content?.parts?.length || 0
+          }))
+        }, null, 2));
         throw new Error('No response from Gemini API');
       }
 
@@ -77,9 +131,14 @@ class OCRService {
       try {
         // Clean the response text (remove markdown formatting if present)
         const jsonString = generatedText.replace(/```json\n?|\n?```/g, '').trim();
+        console.log('✂️ OCR Service: Cleaned JSON string:', jsonString);
         extractedData = JSON.parse(jsonString);
+        console.log('✅ OCR Service: Successfully parsed JSON:', extractedData);
       } catch (parseError) {
-        console.error('Failed to parse Gemini response as JSON:', generatedText);
+        console.error('❌ OCR Service: Failed to parse JSON');
+        console.error('📝 OCR Service: Original text:', generatedText);
+        console.error('✂️ OCR Service: Cleaned text:', jsonString);
+        console.error('🚫 OCR Service: Parse error:', parseError.message);
         throw new Error('Invalid JSON response from OCR service');
       }
 
@@ -94,11 +153,42 @@ class OCRService {
       };
 
     } catch (error) {
-      console.error('OCR extraction error:', error.message);
+      console.error('❌ OCR Service: Extraction error occurred');
+      console.error('🚫 OCR Service: Error message:', error.message);
+      console.error('📋 OCR Service: Error details:', {
+        name: error.name,
+        stack: error.stack?.split('\n').slice(0, 3),
+        isAxiosError: !!error.isAxiosError,
+        response: error.response ? {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data
+        } : 'No response data'
+      });
       
       // Return fallback OCR using basic text recognition
-      return this.fallbackOCR(imagePath);
+      console.log('🔄 OCR Service: Falling back to basic OCR');
+      return this.fallbackOCR(filePath);
     }
+  }
+
+  /**
+   * Get MIME type based on file extension
+   * @private
+   */
+  getMimeType(filePath) {
+    const ext = filePath.toLowerCase().split('.').pop();
+    
+    const mimeTypes = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'pdf': 'application/pdf',
+      'webp': 'image/webp'
+    };
+    
+    return mimeTypes[ext] || 'image/jpeg';
   }
 
   /**
@@ -177,7 +267,7 @@ class OCRService {
    * Fallback OCR using simpler text extraction
    * @private
    */
-  async fallbackOCR(imagePath) {
+  async fallbackOCR(filePath) {
     // Simple fallback that returns default values
     // In a production environment, you might use Tesseract.js or another OCR library
     
