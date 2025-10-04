@@ -120,12 +120,36 @@ const getExpenseById = async (expenseId, userId, userRole, companyId) => {
 };
 
 /**
+ * Find or create category by name
+ */
+const findOrCreateCategory = async (categoryName, companyId) => {
+  // First try to find existing category
+  const existing = await query(
+    'SELECT id FROM expense_categories WHERE name = $1 AND company_id = $2',
+    [categoryName, companyId]
+  );
+
+  if (existing.rows.length > 0) {
+    return existing.rows[0].id;
+  }
+
+  // Create new category
+  const result = await query(
+    'INSERT INTO expense_categories (company_id, name) VALUES ($1, $2) RETURNING id',
+    [companyId, categoryName]
+  );
+
+  return result.rows[0].id;
+};
+
+/**
  * Create a new expense (draft)
  */
 const createExpense = async (expenseData, userId, companyId, companyCurrency) => {
   const {
     title,
     categoryId,
+    categoryName,
     originalAmount,
     originalCurrency,
     dateOfExpense,
@@ -133,6 +157,12 @@ const createExpense = async (expenseData, userId, companyId, companyCurrency) =>
     vendor,
     description,
   } = expenseData;
+
+  // Handle category - either by ID or by name
+  let finalCategoryId = categoryId;
+  if (!finalCategoryId && categoryName) {
+    finalCategoryId = await findOrCreateCategory(categoryName, companyId);
+  }
 
   // Convert currency if needed
   const conversion = await convertCurrency(
@@ -154,7 +184,7 @@ const createExpense = async (expenseData, userId, companyId, companyCurrency) =>
       companyId,
       userId,
       title,
-      categoryId,
+      finalCategoryId,
       originalAmount,
       originalCurrency,
       conversion.convertedAmount,
@@ -204,6 +234,7 @@ const updateExpense = async (expenseId, expenseData, userId, companyId, companyC
   const {
     title,
     categoryId,
+    categoryName,
     originalAmount,
     originalCurrency,
     dateOfExpense,
@@ -211,6 +242,12 @@ const updateExpense = async (expenseId, expenseData, userId, companyId, companyC
     vendor,
     description,
   } = expenseData;
+
+  // Handle category - either by ID or by name
+  let finalCategoryId = categoryId;
+  if (!finalCategoryId && categoryName) {
+    finalCategoryId = await findOrCreateCategory(categoryName, companyId);
+  }
 
   // Convert currency if amount or currency changed
   let conversion = {
@@ -234,7 +271,7 @@ const updateExpense = async (expenseId, expenseData, userId, companyId, companyC
      RETURNING *`,
     [
       title,
-      categoryId,
+      finalCategoryId,
       originalAmount,
       originalCurrency,
       conversion.convertedAmount,

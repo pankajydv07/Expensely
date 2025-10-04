@@ -1,28 +1,29 @@
 const express = require('express');
 const { protect } = require('../middlewares/authMiddleware');
-const { isAdmin } = require('../middlewares/rbacMiddleware');
+const { isAdmin, isManagerOrAdmin } = require('../middlewares/rbacMiddleware');
+const {
+  getCategories,
+  addCategory,
+  updateCategory,
+  deleteCategory
+} = require('../controllers/categoryController');
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(protect);
 
-// Placeholder routes - implement controllers as needed
-router.get('/', (req, res) => {
-  res.json({ success: true, message: 'Get all categories for company - To be implemented' });
-});
+// Get all categories for the user's company
+router.get('/', getCategories);
 
-router.post('/', isAdmin, (req, res) => {
-  res.json({ success: true, message: 'Create category - To be implemented' });
-});
+// Create a new category (authenticated users)
+router.post('/', addCategory);
 
-router.put('/:id', isAdmin, (req, res) => {
-  res.json({ success: true, message: 'Update category - To be implemented' });
-});
+// Update a category (manager or admin)
+router.put('/:id', isManagerOrAdmin, updateCategory);
 
-router.delete('/:id', isAdmin, (req, res) => {
-  res.json({ success: true, message: 'Delete category - To be implemented' });
-});
+// Delete a category (manager or admin)
+router.delete('/:id', isManagerOrAdmin, deleteCategory);
 
 module.exports = router;
 
