@@ -2,6 +2,7 @@ const bcrypt = require('bcrypt');
 const { query, transaction } = require('../config/db');
 const { AppError } = require('../middlewares/errorHandler');
 const countryApiClient = require('../integrations/countryApiClient');
+const { generateRandomPassword, sendPasswordResetEmail } = require('./emailService');
 
 /**
  * Hash password
@@ -204,6 +205,59 @@ const getUserByEmail = async (email) => {
   return result.rows[0];
 };
 
+/**
+ * Handle forgot password - generate new password and send via email
+ */
+const forgotPassword = async (email) => {
+  try {
+    // Find user by email
+    const userResult = await query(
+      `SELECT u.id, u.name, u.email, u.company_id, r.name as role 
+       FROM users u 
+       JOIN roles r ON u.role_id = r.id 
+       WHERE u.email = $1 AND u.is_active = true`,
+      [email]
+    );
+
+    if (userResult.rows.length === 0) {
+      throw new AppError('No account found with this email address', 404);
+    }
+
+    const user = userResult.rows[0];
+
+    // Only allow password reset for managers and employees, not admins
+    if (user.role === 'admin') {
+      throw new AppError('Password reset is not available for admin accounts. Please contact your system administrator.', 403);
+    }
+
+    // Generate new random password
+    const newPassword = generateRandomPassword();
+    
+    // Hash the new password
+    const hashedPassword = await hashPassword(newPassword);
+
+    // Update user's password in database
+    await query(
+      'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
+      [hashedPassword, user.id]
+    );
+
+    // Send email with new password
+    await sendPasswordResetEmail(user.email, user.name, newPassword);
+
+    console.log(`🔐 Password reset completed for user: ${user.email}`);
+
+    return {
+      success: true,
+      message: 'A new password has been sent to your email address'
+    };
+
+  } catch (error) {
+    console.error('Error in forgot password:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   hashPassword,
   comparePassword,
@@ -211,5 +265,6 @@ module.exports = {
   authenticateUser,
   getUserById,
   getUserByEmail,
+  forgotPassword,
 };
 

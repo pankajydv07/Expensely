@@ -23,10 +23,14 @@ const loginValidation = [
   body('password').notEmpty().withMessage('Password is required'),
 ];
 
+const forgotPasswordValidation = [
+  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+];
+
 // Routes
 router.post('/signup', signupValidation, authController.signup);
 router.post('/login', loginValidation, authController.login);
-router.post('/forgot-password', authController.forgotPassword);
+router.post('/forgot-password', forgotPasswordValidation, authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
 router.get('/me', protect, authController.getCurrentUser);
 router.post('/refresh', authController.refreshToken);

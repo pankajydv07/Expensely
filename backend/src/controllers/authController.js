@@ -136,19 +136,40 @@ const getCurrentUser = asyncHandler(async (req, res, next) => {
  * @access  Public
  */
 const forgotPassword = asyncHandler(async (req, res, next) => {
+  // Check validation errors
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ 
+      success: false, 
+      errors: errors.array() 
+    });
+  }
+
   const { email } = req.body;
 
   if (!email) {
     return next(new AppError('Please provide an email address', 400));
   }
 
-  // TODO: Implement password reset token generation and email sending
-  // For now, just return success message
-  
-  res.status(200).json({
-    success: true,
-    message: 'Password reset link sent to email (Feature coming soon)',
-  });
+  try {
+    // Call the forgot password service
+    const result = await authService.forgotPassword(email);
+    
+    res.status(200).json({
+      success: true,
+      message: result.message,
+    });
+  } catch (error) {
+    // Don't reveal if email exists or not for security
+    if (error.statusCode === 404) {
+      res.status(200).json({
+        success: true,
+        message: 'If an account with this email exists, a new password has been sent to your email address',
+      });
+    } else {
+      return next(error);
+    }
+  }
 });
 
 /**

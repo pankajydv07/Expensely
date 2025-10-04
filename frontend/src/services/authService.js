@@ -94,3 +94,6 @@ const authService = {
 
 export default authService;
 
+// Named exports for convenience
+export const { forgotPassword } = authService;
+

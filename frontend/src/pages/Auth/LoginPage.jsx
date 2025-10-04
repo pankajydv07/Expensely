@@ -12,8 +12,13 @@ import {
   CircularProgress,
   InputAdornment,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import { Visibility, VisibilityOff, AccountBalance } from '@mui/icons-material';
+import authService from '../../services/authService';
 import { login, clearError } from '../../store/authSlice';
 
 const LoginPage = () => {
@@ -26,6 +31,11 @@ const LoginPage = () => {
     password: '',
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [forgotPasswordMessage, setForgotPasswordMessage] = useState('');
+  const [forgotPasswordError, setForgotPasswordError] = useState('');
 
   const handleChange = (e) => {
     setFormData({
@@ -41,6 +51,33 @@ const LoginPage = () => {
     if (result.type === 'auth/login/fulfilled') {
       navigate('/');
     }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!forgotPasswordEmail) {
+      setForgotPasswordError('Please enter your email address');
+      return;
+    }
+
+    setForgotPasswordLoading(true);
+    setForgotPasswordError('');
+    setForgotPasswordMessage('');
+
+    try {
+      const response = await authService.forgotPassword(forgotPasswordEmail);
+      setForgotPasswordMessage(response.message);
+    } catch (error) {
+      setForgotPasswordError(error.message || 'Failed to send reset password email');
+    } finally {
+      setForgotPasswordLoading(false);
+    }
+  };
+
+  const handleCloseForgotPassword = () => {
+    setForgotPasswordOpen(false);
+    setForgotPasswordEmail('');
+    setForgotPasswordMessage('');
+    setForgotPasswordError('');
   };
 
   return (
@@ -128,6 +165,13 @@ const LoginPage = () => {
             </Button>
 
             <Box sx={{ textAlign: 'center', mt: 2 }}>
+              <Typography 
+                variant="body2" 
+                sx={{ cursor: 'pointer', color: '#1976d2', mb: 1 }}
+                onClick={() => setForgotPasswordOpen(true)}
+              >
+                Forgot Password?
+              </Typography>
               <Typography variant="body2">
                 Don't have an account?{' '}
                 <Link
@@ -160,6 +204,58 @@ const LoginPage = () => {
           </Box>
         </Paper>
       </Container>
+
+      {/* Forgot Password Modal */}
+      <Dialog 
+        open={forgotPasswordOpen} 
+        onClose={handleCloseForgotPassword}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Reset Password</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Enter your email address and we'll send you a new password.
+          </Typography>
+          
+          {forgotPasswordError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {forgotPasswordError}
+            </Alert>
+          )}
+          
+          {forgotPasswordMessage && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              {forgotPasswordMessage}
+            </Alert>
+          )}
+          
+          <TextField
+            fullWidth
+            label="Email Address"
+            type="email"
+            value={forgotPasswordEmail}
+            onChange={(e) => setForgotPasswordEmail(e.target.value)}
+            disabled={forgotPasswordLoading}
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={handleCloseForgotPassword}
+            disabled={forgotPasswordLoading}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleForgotPassword}
+            variant="contained"
+            disabled={forgotPasswordLoading}
+          >
+            {forgotPasswordLoading ? <CircularProgress size={20} /> : 'Send New Password'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
