@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { logout } from '../../store/authSlice';
 import UserManagement from '../../components/admin/UserManagement';
 import CategoryManagement from '../../components/admin/CategoryManagement';
+import ApprovalTable from '../../components/approval/ApprovalTable';
 
 // Tab panel component
 function TabPanel({ children, value, index, ...other }) {
@@ -78,6 +79,7 @@ const AdminDashboard = () => {
             <Tabs value={activeTab} onChange={handleTabChange} aria-label="admin tabs">
               <Tab label="User Management" />
               <Tab label="Categories" />
+              <Tab label="Approvals" />
               <Tab label="Company Settings" />
               <Tab label="Reports" />
             </Tabs>
@@ -92,6 +94,10 @@ const AdminDashboard = () => {
           </TabPanel>
 
           <TabPanel value={activeTab} index={2}>
+            <ApprovalTable />
+          </TabPanel>
+
+          <TabPanel value={activeTab} index={3}>
             <Box sx={{ p: 3, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary" gutterBottom>
                 Company Settings
@@ -104,7 +110,7 @@ const AdminDashboard = () => {
             </Box>
           </TabPanel>
 
-          <TabPanel value={activeTab} index={3}>
+          <TabPanel value={activeTab} index={4}>
             <Box sx={{ p: 3, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary" gutterBottom>
                 Reports & Analytics
