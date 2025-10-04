@@ -1,11 +1,30 @@
 const { query, transaction } = require('../config/db');
 
 class ApprovalService {
-  // Get pending approvals for a manager
-  async getPendingApprovals(managerId, companyId) {
+  // Get pending approvals for a manager or admin
+  async getPendingApprovals(userId, companyId) {
     try {
-      // Get expenses that are waiting for approval where the user is a manager
-      // of the requester or where approval rules apply
+      console.log('ApprovalService: Getting pending approvals for user:', userId, 'company:', companyId);
+      
+      // First check if user is admin
+      const userRole = await query(`
+        SELECT role_id FROM users WHERE id = $1 AND company_id = $2
+      `, [userId, companyId]);
+
+      console.log('ApprovalService: User role:', userRole.rows[0]?.role_id);
+
+      let whereCondition;
+      if (userRole.rows[0]?.role_id === 1) {
+        // Admin can see all pending approvals in the company
+        whereCondition = `e.company_id = $1 AND e.status = 'waiting_approval'`;
+        console.log('ApprovalService: Admin access - showing all company approvals');
+      } else {
+        // Manager can only see approvals for their direct reports
+        whereCondition = `e.company_id = $1 AND e.status = 'waiting_approval' AND mr.manager_id = $2`;
+        console.log('ApprovalService: Manager access - showing team approvals only');
+      }
+
+      // Get expenses that are waiting for approval
       const result = await query(`
         SELECT 
           e.id,
@@ -18,22 +37,22 @@ class ApprovalService {
           e.description,
           e.status,
           e.submitted_at,
-          u.name as requester_name,
-          u.email as requester_email,
+          u.name as user_name,
+          u.email as user_email,
           ec.name as category_name,
-          mr.manager_id
+          -- Use company amount and currency for consistent display
+          e.company_amount as amount,
+          e.company_currency as currency,
+          e.date_of_expense as expense_date
         FROM expenses e
         JOIN users u ON e.requester_id = u.id
         LEFT JOIN expense_categories ec ON e.category_id = ec.id
-        LEFT JOIN manager_relationships mr ON u.id = mr.user_id
-        WHERE e.company_id = $1
-          AND e.status = 'waiting_approval'
-          AND (mr.manager_id = $2 OR $2 IN (
-            SELECT user_id FROM users WHERE role_id = 1 AND company_id = $1
-          ))
+        ${userRole.rows[0]?.role_id === 1 ? '' : 'LEFT JOIN manager_relationships mr ON u.id = mr.user_id'}
+        WHERE ${whereCondition}
         ORDER BY e.submitted_at ASC
-      `, [companyId, managerId]);
+      `, userRole.rows[0]?.role_id === 1 ? [companyId] : [companyId, userId]);
 
+      console.log('ApprovalService: Found', result.rows.length, 'pending approvals');
       return result.rows;
     } catch (error) {
       console.error('Error getting pending approvals:', error);
