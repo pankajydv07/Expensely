@@ -11,6 +11,11 @@ router.use(protect);
 // Get categories (must be before /:id route)
 router.get('/categories', expenseController.getCategories);
 
+// OCR and form data routes (must be before /:id route)
+router.post('/upload-receipt', upload.single('receipt'), expenseController.uploadReceipt);
+router.get('/form-data', expenseController.getFormData);
+router.get('/convert-currency', expenseController.convertCurrency);
+
 // Expense routes
 router.get('/', expenseController.getExpenses);
 router.get('/:id', expenseController.getExpense);

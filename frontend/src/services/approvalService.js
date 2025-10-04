@@ -3,7 +3,7 @@ import api from './api';
 // Get pending approvals (for managers)
 export const getPendingApprovals = async () => {
   try {
-    const response = await api.get('/api/approvals/pending');
+    const response = await api.get('/approvals/pending');
     return response.data;
   } catch (error) {
     console.error('Error getting pending approvals:', error);
@@ -14,7 +14,7 @@ export const getPendingApprovals = async () => {
 // Approve an expense
 export const approveExpense = async (expenseId, comment = '') => {
   try {
-    const response = await api.post(`/api/approvals/${expenseId}/approve`, {
+    const response = await api.post(`/approvals/${expenseId}/approve`, {
       comment
     });
     return response.data;
@@ -27,7 +27,7 @@ export const approveExpense = async (expenseId, comment = '') => {
 // Reject an expense
 export const rejectExpense = async (expenseId, comment = '') => {
   try {
-    const response = await api.post(`/api/approvals/${expenseId}/reject`, {
+    const response = await api.post(`/approvals/${expenseId}/reject`, {
       comment
     });
     return response.data;
@@ -40,7 +40,7 @@ export const rejectExpense = async (expenseId, comment = '') => {
 // Get approval history for an expense
 export const getApprovalHistory = async (expenseId) => {
   try {
-    const response = await api.get(`/api/approvals/${expenseId}/history`);
+    const response = await api.get(`/approvals/${expenseId}/history`);
     return response.data;
   } catch (error) {
     console.error('Error getting approval history:', error);

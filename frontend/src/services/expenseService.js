@@ -48,7 +48,19 @@ const expenseService = {
 
   // Get expense categories
   getCategories: async () => {
-    const response = await api.get('/expenses/categories');
+    console.log('ExpenseService: Calling /categories');
+    const response = await api.get('/categories');
+    console.log('ExpenseService: Categories response:', response.data);
+    return response.data;
+  },
+
+  // Upload receipt for OCR processing
+  uploadReceipt: async (formData) => {
+    const response = await api.post('/expenses/upload-receipt', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 

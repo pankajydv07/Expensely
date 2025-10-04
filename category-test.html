@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Category Selection Test</title>
+</head>
+<body>
+    <h1>Category Selection Test</h1>
+    
+    <select id="categorySelect" onchange="console.log('Selected:', this.value)">
+        <option value="">Select Category</option>
+        <option value="11">Travel</option>
+        <option value="12">Meals & Entertainment</option>
+        <option value="13">Office Supplies</option>
+        <option value="14">Software & Subscriptions</option>
+        <option value="15">Training & Education</option>
+        <option value="16">Miscellaneous</option>
+    </select>
+    
+    <p>Selected value: <span id="selected"></span></p>
+    
+    <script>
+        const select = document.getElementById('categorySelect');
+        const selectedSpan = document.getElementById('selected');
+        
+        select.addEventListener('change', function() {
+            selectedSpan.textContent = this.value;
+            console.log('Category selected:', this.value);
+        });
+    </script>
+</body>
+</html>

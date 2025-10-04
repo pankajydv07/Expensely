@@ -35,6 +35,7 @@ import {
 import { logout } from '../../store/authSlice';
 import {
   fetchExpenses,
+  fetchCategories,
   createExpense,
   updateExpense,
   submitExpense,
@@ -55,9 +56,10 @@ const EmployeeDashboard = () => {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [tabValue, setTabValue] = useState(0);
 
-  // Load expenses on mount
+  // Load expenses and categories on mount
   useEffect(() => {
     dispatch(fetchExpenses());
+    dispatch(fetchCategories());
   }, [dispatch]);
 
   const handleLogout = () => {
@@ -376,4 +378,3 @@ const EmployeeDashboard = () => {
 };
 
 export default EmployeeDashboard;
-

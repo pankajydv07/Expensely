@@ -12,14 +12,39 @@ router.get('/pending',
   approvalController.getPendingApprovals
 );
 
-// Approve an expense
+// Dashboard routes
+router.get('/expenses', 
+  protect, 
+  isManagerOrAdmin, 
+  approvalController.getExpensesForApproval
+);
+
+router.get('/stats', 
+  protect, 
+  isManagerOrAdmin, 
+  approvalController.getApprovalStats
+);
+
+// Workflow approval routes
+router.post('/expenses/:id/approve', 
+  protect, 
+  isManagerOrAdmin, 
+  approvalController.approveExpenseWithWorkflow
+);
+
+router.post('/expenses/:id/reject', 
+  protect, 
+  isManagerOrAdmin, 
+  approvalController.rejectExpenseWithWorkflow
+);
+
+// Legacy approval routes (for backwards compatibility)
 router.post('/:id/approve', 
   protect, 
   isManagerOrAdmin, 
   approvalController.approveExpense
 );
 
-// Reject an expense
 router.post('/:id/reject', 
   protect, 
   isManagerOrAdmin, 

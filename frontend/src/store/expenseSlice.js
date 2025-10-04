@@ -218,8 +218,20 @@ const expenseSlice = createSlice({
         state.error = action.payload;
       })
       // Fetch categories
+      .addCase(fetchCategories.pending, (state) => {
+        console.log('ExpenseSlice: Categories fetch pending...');
+        state.isLoading = true;
+        state.error = null;
+      })
       .addCase(fetchCategories.fulfilled, (state, action) => {
+        console.log('ExpenseSlice: Categories fetched successfully:', action.payload);
+        state.isLoading = false;
         state.categories = action.payload;
+      })
+      .addCase(fetchCategories.rejected, (state, action) => {
+        console.error('ExpenseSlice: Categories fetch failed:', action.payload);
+        state.isLoading = false;
+        state.error = action.payload;
       });
   },
 });

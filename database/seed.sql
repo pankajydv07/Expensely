@@ -53,10 +53,16 @@ INSERT INTO expense_categories (company_id, name) VALUES
 (1, 'Office Supplies'),
 (1, 'Software & Subscriptions'),
 (1, 'Training & Education'),
+(1, 'Transportation'),
+(1, 'Accommodation'),
+(1, 'Marketing & Advertising'),
+(1, 'Telecommunications'),
 (1, 'Miscellaneous'),
 (2, 'Travel'),
 (2, 'Meals'),
 (2, 'Office Supplies'),
+(2, 'Transportation'),
+(2, 'Telecommunications'),
 (2, 'Miscellaneous');
 
 -- Sample Approval Rules for Acme Corporation

@@ -15,13 +15,20 @@ import {
   CircularProgress,
   InputAdornment,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Divider,
 } from '@mui/material';
-import { CloudUpload, Close, Description } from '@mui/icons-material';
+import { CloudUpload, Close, Description, Add } from '@mui/icons-material';
 import { fetchCategories } from '../../store/expenseSlice';
+import * as categoryService from '../../services/categoryService';
 
 const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Expense' }) => {
   const dispatch = useDispatch();
-  const { categories, loading: categoriesLoading } = useSelector((state) => state.expense);
+  const { categories, isLoading: categoriesLoading } = useSelector((state) => state.expense);
+  const { user } = useSelector((state) => state.auth);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -30,6 +37,7 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
     original_amount: '',
     original_currency: 'USD',
     category_id: '',
+    category_name: '',
     receipt_file: null,
   });
 
@@ -37,13 +45,32 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [ocrProcessing, setOcrProcessing] = useState(false);
+  
+  // Add Category Modal states
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [addingCategory, setAddingCategory] = useState(false);
 
-  // Load categories on mount
+  // Debug categories
   useEffect(() => {
+    console.log('ExpenseForm: Categories available:', categories.length);
     if (categories.length === 0) {
+      console.log('ExpenseForm: Categories not loaded, dispatching fetch...');
       dispatch(fetchCategories());
     }
   }, [dispatch, categories.length]);
+
+  // Debug categories
+  useEffect(() => {
+    console.log('ExpenseForm: categories updated =', categories);
+    console.log('ExpenseForm: categoriesLoading =', categoriesLoading);
+    console.log('ExpenseForm: selected category_id =', formData.category_id);
+  }, [categories, categoriesLoading, formData.category_id]);
+
+  const retryLoadCategories = () => {
+    console.log('ExpenseForm: Retrying to load categories...');
+    dispatch(fetchCategories());
+  };
 
   // Populate form with initial data (for editing)
   useEffect(() => {
@@ -67,9 +94,14 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    console.log('ExpenseForm: Input changed -', name, '=', value, typeof value);
+    
+    // Convert category_id to number for proper matching
+    const processedValue = name === 'category_id' ? (value === '' ? '' : Number(value)) : value;
+    
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: processedValue,
     }));
     
     // Clear error for this field
@@ -164,6 +196,62 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
     setReceiptPreview(null);
   };
 
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) {
+      setErrors(prev => ({
+        ...prev,
+        category: 'Category name is required'
+      }));
+      return;
+    }
+
+    setAddingCategory(true);
+    try {
+      const response = await categoryService.addCategory({
+        name: newCategoryName.trim()
+      });
+
+      if (response.success) {
+        // Refresh categories to include the new one
+        dispatch(fetchCategories());
+        
+        // Select the new category
+        setFormData(prev => ({
+          ...prev,
+          category_id: response.data.id
+        }));
+
+        // Close modal and reset
+        setShowAddCategory(false);
+        setNewCategoryName('');
+        setErrors(prev => ({
+          ...prev,
+          category: null
+        }));
+
+        console.log('Category added successfully:', response.data);
+      }
+    } catch (error) {
+      console.error('Error adding category:', error);
+      const errorMessage = error.response?.data?.error || 'Failed to add category';
+      
+      // Show different messages based on the error
+      if (errorMessage.includes('already exists')) {
+        setErrors(prev => ({
+          ...prev,
+          category: 'This category already exists. Please choose a different name.'
+        }));
+      } else {
+        setErrors(prev => ({
+          ...prev,
+          category: errorMessage
+        }));
+      }
+    } finally {
+      setAddingCategory(false);
+    }
+  };
+
   const validateForm = () => {
     const newErrors = {};
 
@@ -179,7 +267,7 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
       newErrors.original_amount = 'Amount must be greater than 0';
     }
 
-    if (!formData.category_id) {
+    if (!formData.category_id && !formData.category_name?.trim()) {
       newErrors.category_id = 'Category is required';
     }
 
@@ -203,7 +291,15 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
       submitData.append('date_of_expense', formData.date_of_expense);
       submitData.append('original_amount', formData.original_amount);
       submitData.append('original_currency', formData.original_currency);
-      submitData.append('category_id', formData.category_id);
+      
+      // Handle category - either by ID (dropdown) or by name (text input)
+      if (formData.category_id) {
+        submitData.append('category_id', formData.category_id);
+        console.log('ExpenseForm: Submitting expense with category_id:', formData.category_id);
+      } else if (formData.category_name?.trim()) {
+        submitData.append('category_name', formData.category_name.trim());
+        console.log('ExpenseForm: Submitting expense with category_name:', formData.category_name);
+      }
       
       if (formData.receipt_file) {
         submitData.append('receipt_file', formData.receipt_file);
@@ -269,31 +365,69 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
           </Grid>
 
           <Grid item xs={12} sm={6}>
-            <FormControl 
-              fullWidth 
-              required 
-              error={Boolean(errors.category_id)}
-              disabled={categoriesLoading}
-            >
-              <InputLabel>Category</InputLabel>
-              <Select
-                name="category_id"
-                value={formData.category_id}
-                onChange={handleInputChange}
-                label="Category"
+            {categories.length > 0 && !categoriesLoading ? (
+              // Dropdown when categories are available
+              <FormControl 
+                fullWidth 
+                required 
+                error={Boolean(errors.category_id)}
               >
-                {categories.map((category) => (
-                  <MenuItem key={category.id} value={category.id}>
-                    {category.name}
+                <InputLabel>Category</InputLabel>
+                <Select
+                  name="category_id"
+                  value={formData.category_id || ''}
+                  onChange={handleInputChange}
+                  label="Category"
+                  displayEmpty
+                >
+                  <MenuItem value="" disabled>
+                    <em>Select a category</em>
                   </MenuItem>
-                ))}
-              </Select>
-              {errors.category_id && (
-                <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 1.5 }}>
-                  {errors.category_id}
-                </Typography>
-              )}
-            </FormControl>
+                  {categories.map((category) => (
+                    <MenuItem key={category.id} value={category.id}>
+                      {category.name}
+                    </MenuItem>
+                  ))}
+                  <Divider />
+                  <MenuItem 
+                    onClick={() => setShowAddCategory(true)}
+                    sx={{ color: 'primary.main', fontWeight: 'bold' }}
+                  >
+                    <Add sx={{ mr: 1 }} />
+                    Add New Category
+                  </MenuItem>
+                </Select>
+                {errors.category_id && (
+                  <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 1.5 }}>
+                    {errors.category_id}
+                  </Typography>
+                )}
+              </FormControl>
+            ) : (
+              // Text input fallback when categories aren't available
+              <Box>
+                <TextField
+                  required
+                  fullWidth
+                  label="Category"
+                  name="category_name"
+                  value={formData.category_name || ''}
+                  onChange={handleInputChange}
+                  error={Boolean(errors.category_id)}
+                  helperText={errors.category_id || "Categories couldn't load. Enter category manually."}
+                  placeholder="e.g., Travel, Meals, Office Supplies"
+                />
+                <Button
+                  size="small"
+                  onClick={retryLoadCategories}
+                  sx={{ mt: 1 }}
+                  startIcon={categoriesLoading ? <CircularProgress size={16} /> : null}
+                  disabled={categoriesLoading}
+                >
+                  {categoriesLoading ? 'Loading...' : 'Retry Loading Categories'}
+                </Button>
+              </Box>
+            )}
           </Grid>
 
           {/* Amount and Currency */}
@@ -439,6 +573,57 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
           </Grid>
         </Grid>
       </Box>
+
+      {/* Add Category Modal */}
+      <Dialog 
+        open={showAddCategory} 
+        onClose={() => setShowAddCategory(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Add New Category</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <TextField
+              autoFocus
+              fullWidth
+              label="Category Name"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              error={!!errors.category}
+              helperText={errors.category}
+              placeholder="e.g., Equipment, Marketing, Travel"
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleAddCategory();
+                }
+              }}
+            />
+            <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+              You can add new categories that will be available for all users in your organization.
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => {
+              setShowAddCategory(false);
+              setNewCategoryName('');
+              setErrors(prev => ({ ...prev, category: null }));
+            }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleAddCategory}
+            variant="contained"
+            disabled={addingCategory || !newCategoryName.trim()}
+            startIcon={addingCategory && <CircularProgress size={20} />}
+          >
+            {addingCategory ? 'Adding...' : 'Add Category'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   );
 };
