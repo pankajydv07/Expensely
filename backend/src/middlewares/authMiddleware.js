@@ -48,13 +48,14 @@ const protect = asyncHandler(async (req, res, next) => {
       id: user.id,
       name: user.name,
       email: user.email,
-      companyId: user.company_id,
+      company_id: user.company_id,
       roleId: user.role_id,
       role: user.role_name,
     };
 
     next();
   } catch (error) {
+    console.error('Auth middleware error:', error);
     return next(new AppError('Not authorized to access this route', 401));
   }
 });

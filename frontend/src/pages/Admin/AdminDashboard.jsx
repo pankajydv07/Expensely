@@ -1,16 +1,43 @@
-import { Box, Typography, Container, Paper, Button, Grid } from '@mui/material';
+import React, { useState } from 'react';
+import { Box, Typography, Container, Paper, Button, Tabs, Tab } from '@mui/material';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { logout } from '../../store/authSlice';
+import UserManagement from '../../components/admin/UserManagement';
+import CategoryManagement from '../../components/admin/CategoryManagement';
+
+// Tab panel component
+function TabPanel({ children, value, index, ...other }) {
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`admin-tabpanel-${index}`}
+      aria-labelledby={`admin-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ py: 3 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+}
 
 const AdminDashboard = () => {
   const { user } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState(0);
 
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login');
+  };
+
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
   };
 
   return (
@@ -46,44 +73,50 @@ const AdminDashboard = () => {
           Administration
         </Typography>
 
-        <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <Paper sx={{ p: 4, textAlign: 'center', minHeight: 400 }}>
+        <Paper sx={{ width: '100%' }}>
+          <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+            <Tabs value={activeTab} onChange={handleTabChange} aria-label="admin tabs">
+              <Tab label="User Management" />
+              <Tab label="Categories" />
+              <Tab label="Company Settings" />
+              <Tab label="Reports" />
+            </Tabs>
+          </Box>
+
+          <TabPanel value={activeTab} index={0}>
+            <UserManagement />
+          </TabPanel>
+
+          <TabPanel value={activeTab} index={1}>
+            <CategoryManagement />
+          </TabPanel>
+
+          <TabPanel value={activeTab} index={2}>
+            <Box sx={{ p: 3, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary" gutterBottom>
-                Admin Dashboard - Under Construction
+                Company Settings
               </Typography>
-              <Typography variant="body1" color="text.secondary" sx={{ mt: 2 }}>
-                This page will display:
+              <Typography variant="body2" color="text.secondary">
+                Company settings management will be implemented here.
+                This will include company information, default currency,
+                approval rules, and other company-wide configurations.
               </Typography>
-              <Box sx={{ mt: 2, textAlign: 'left', maxWidth: 600, mx: 'auto' }}>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  • User management (create, edit, delete users)
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  • Role assignment and manager relationships
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  • Approval rules configuration
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  • Expense categories management
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  • Company settings
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  • Dashboard statistics and reports
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  • Override approval capabilities
-                </Typography>
-              </Box>
-              <Typography variant="caption" display="block" sx={{ mt: 4 }}>
-                Please implement the full admin dashboard UI
+            </Box>
+          </TabPanel>
+
+          <TabPanel value={activeTab} index={3}>
+            <Box sx={{ p: 3, textAlign: 'center' }}>
+              <Typography variant="h6" color="text.secondary" gutterBottom>
+                Reports & Analytics
               </Typography>
-            </Paper>
-          </Grid>
-        </Grid>
+              <Typography variant="body2" color="text.secondary">
+                Dashboard statistics and reports will be implemented here.
+                This will include expense analytics, user activity reports,
+                approval metrics, and financial summaries.
+              </Typography>
+            </Box>
+          </TabPanel>
+        </Paper>
       </Container>
     </Box>
   );
