@@ -150,15 +150,122 @@ const createUser = async (userData, companyId) => {
 };
 
 /**
- * Update a user (simplified version)
+ * Update a user
  */
 const updateUser = async (userId, userData, companyId) => {
   try {
-    // For now, return a success message since full user update 
-    // requires role management that's not implemented yet
-    throw new Error('User update feature is coming soon.');
+    console.log('🔄 UserService: Updating user', userId, 'with data:', userData);
+
+    // Verify user exists and is in same company
+    const existingUser = await getUserById(userId, companyId);
+    if (!existingUser) {
+      throw new Error('User not found');
+    }
+
+    // Build dynamic query based on provided fields
+    const updateFields = [];
+    const updateValues = [];
+    let paramIndex = 1;
+
+    if (userData.name !== undefined) {
+      updateFields.push(`name = $${paramIndex}`);
+      updateValues.push(userData.name);
+      paramIndex++;
+    }
+
+    if (userData.email !== undefined) {
+      // Check if email is already taken by another user
+      const emailCheck = await query(
+        'SELECT id FROM users WHERE email = $1 AND company_id = $2 AND id != $3',
+        [userData.email, companyId, userId]
+      );
+
+      if (emailCheck.rows.length > 0) {
+        throw new Error('Email is already in use');
+      }
+
+      updateFields.push(`email = $${paramIndex}`);
+      updateValues.push(userData.email);
+      paramIndex++;
+    }
+
+    if (userData.password !== undefined) {
+      const hashedPassword = await bcrypt.hash(userData.password, 12);
+      updateFields.push(`password_hash = $${paramIndex}`);
+      updateValues.push(hashedPassword);
+      paramIndex++;
+    }
+
+    if (userData.role !== undefined) {
+      // Get role ID
+      const roleResult = await query(
+        'SELECT id FROM roles WHERE name = $1',
+        [userData.role]
+      );
+
+      if (roleResult.rows.length === 0) {
+        throw new Error('Invalid role');
+      }
+
+      updateFields.push(`role_id = $${paramIndex}`);
+      updateValues.push(roleResult.rows[0].id);
+      paramIndex++;
+    }
+
+    if (userData.isActive !== undefined) {
+      updateFields.push(`is_active = $${paramIndex}`);
+      updateValues.push(userData.isActive);
+      paramIndex++;
+    }
+
+    if (updateFields.length === 0) {
+      throw new Error('No fields to update');
+    }
+
+    // Add WHERE clause parameters
+    updateValues.push(userId, companyId);
+    
+    // Construct and execute update query
+    const updateQuery = `
+      UPDATE users 
+      SET ${updateFields.join(', ')}, updated_at = NOW()
+      WHERE id = $${paramIndex} AND company_id = $${paramIndex + 1}
+      RETURNING id, name, email, is_active, created_at, updated_at
+    `;
+
+    console.log('🔄 UserService: Executing update query:', updateQuery);
+    console.log('🔄 UserService: Update values:', updateValues);
+
+    const result = await query(updateQuery, updateValues);
+
+    if (result.rows.length === 0) {
+      throw new Error('User not found or update failed');
+    }
+
+    // Handle manager relationship if provided
+    if (userData.managerId !== undefined) {
+      // First, remove existing manager relationship
+      await query(
+        'DELETE FROM manager_relationships WHERE user_id = $1',
+        [userId]
+      );
+
+      // Add new manager relationship if managerId is provided
+      if (userData.managerId) {
+        await query(
+          'INSERT INTO manager_relationships (user_id, manager_id) VALUES ($1, $2)',
+          [userId, userData.managerId]
+        );
+      }
+    }
+
+    // Return updated user with role information
+    const updatedUser = await getUserById(userId, companyId);
+    console.log('✅ UserService: User updated successfully:', updatedUser);
+
+    return updatedUser;
   } catch (error) {
-    console.error('Error updating user:', error);
+    console.error('❌ UserService: Error updating user:', error);
     throw error;
   }
 };

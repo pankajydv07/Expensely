@@ -112,8 +112,32 @@ const updateUser = async (req, res) => {
     }
 
     const { id: userId } = req.params;
-    const { company_id: companyId } = req.user;
+    const { company_id: companyId, role: userRole, id: currentUserId } = req.user;
     const userData = req.body;
+
+    console.log('🔄 UserController: Update request - UserID:', userId, 'Current User:', currentUserId, 'Role:', userRole);
+
+    // Access control: Only admins can update other users, users can update themselves
+    if (userRole !== 'admin' && userId !== currentUserId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. You can only update your own profile.'
+      });
+    }
+
+    // If not admin, restrict what fields can be updated
+    if (userRole !== 'admin') {
+      const allowedFields = ['name', 'email', 'password'];
+      const providedFields = Object.keys(userData);
+      const restrictedFields = providedFields.filter(field => !allowedFields.includes(field));
+      
+      if (restrictedFields.length > 0) {
+        return res.status(403).json({
+          success: false,
+          error: `Access denied. You cannot update these fields: ${restrictedFields.join(', ')}`
+        });
+      }
+    }
 
     const updatedUser = await userService.updateUser(userId, userData, companyId);
 
