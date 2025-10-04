@@ -16,6 +16,7 @@ const createUserValidation = [
     .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
     .withMessage('Password must contain uppercase, lowercase, and number'),
   body('role').isIn(['employee', 'manager', 'admin']).withMessage('Invalid role'),
+  body('managerId').optional().isUUID().withMessage('Manager ID must be a valid UUID'),
 ];
 
 // Validation rules for user update

@@ -70,13 +70,79 @@ const getUserById = async (userId, companyId) => {
 };
 
 /**
- * Create a new user (simplified version)
+ * Create a new user
  */
 const createUser = async (userData, companyId) => {
+  const { name, email, password, role, managerId, isActive = true } = userData;
+
   try {
-    // For now, return a success message since full user creation 
-    // requires role management that's not implemented yet
-    throw new Error('User creation feature is coming soon. Please use the signup endpoint for now.');
+    // Check if user with this email already exists
+    const existingUser = await query(
+      'SELECT id FROM users WHERE email = $1 AND company_id = $2',
+      [email, companyId]
+    );
+
+    if (existingUser.rows.length > 0) {
+      throw new Error('User with this email already exists');
+    }
+
+    // Get role_id from role name
+    const roleResult = await query(
+      'SELECT id FROM roles WHERE name = $1',
+      [role]
+    );
+
+    if (roleResult.rows.length === 0) {
+      throw new Error('Invalid role specified');
+    }
+
+    const roleId = roleResult.rows[0].id;
+
+    // Hash password
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    // Create user
+    const userResult = await query(
+      'INSERT INTO users (company_id, role_id, name, email, password_hash, is_active) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, email, is_active, created_at',
+      [companyId, roleId, name, email, hashedPassword, isActive]
+    );
+
+    const newUser = userResult.rows[0];
+
+    // If managerId is provided, create manager relationship
+    if (managerId) {
+      // Verify manager exists and is in same company
+      const managerCheck = await query(
+        'SELECT u.id, r.name as role FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = $1 AND u.company_id = $2',
+        [managerId, companyId]
+      );
+
+      if (managerCheck.rows.length === 0) {
+        throw new Error('Manager not found or not in the same company');
+      }
+
+      const managerRole = managerCheck.rows[0].role;
+      if (!['manager', 'admin'].includes(managerRole)) {
+        throw new Error('Assigned manager must have manager or admin role');
+      }
+
+      // Create manager relationship
+      await query(
+        'INSERT INTO manager_relationships (user_id, manager_id) VALUES ($1, $2)',
+        [newUser.id, managerId]
+      );
+    }
+
+    return {
+      id: newUser.id,
+      name: newUser.name,
+      email: newUser.email,
+      role: role,
+      isActive: newUser.is_active,
+      createdAt: newUser.created_at
+    };
+
   } catch (error) {
     console.error('Error creating user:', error);
     throw error;
