@@ -1,12 +1,17 @@
 # Expensely - Expense Management System
 
 #Team name : Zenith Zero
-\n Team leader : Ujjawal pandey
+
+#Team leader : Ujjawal pandey
+
 #Team Member 1 : Pankaj Yadav
+
 #Team Member 2 : Rashi Agrawal
 
 #Problem Statement Name : Expense Tracker
+
 #Reviewer Name : Aman Patel
+
 #Video Pressentation Link :https://drive.google.com/file/d/1Fkr4vKxh7ZyTI3TTrpMpWnHf6aK0VN8u/view?usp=sharing
 
 A comprehensive expense management system with configurable multi-level approval workflows, OCR receipt scanning, and multi-currency support.
