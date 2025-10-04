@@ -56,16 +56,63 @@ const getExpenses = async (userId, userRole, companyId, filters = {}) => {
       u.name as requester_name,
       u.email as requester_email,
       c.name as category_name,
-      (SELECT COUNT(*) FROM expense_attachments WHERE expense_id = e.id) as attachment_count
+      (SELECT COUNT(*) FROM expense_attachments WHERE expense_id = e.id) as attachment_count,
+      ew.id as workflow_instance_id,
+      ew.current_step,
+      ew.status as workflow_status,
+      w.name as workflow_name
      FROM expenses e
      LEFT JOIN users u ON e.requester_id = u.id
      LEFT JOIN expense_categories c ON e.category_id = c.id
+     LEFT JOIN expense_workflows ew ON e.id = ew.expense_id
+     LEFT JOIN approval_workflows w ON ew.workflow_id = w.id
      ${whereClause}
      ORDER BY e.submitted_at DESC`,
     params
   );
 
-  return result.rows;
+  // Enhance expenses with approval progress for those in workflow
+  const expensesWithProgress = await Promise.all(
+    result.rows.map(async (expense) => {
+      if (expense.workflow_instance_id && (expense.status === 'waiting_approval' || expense.status === 'approved')) {
+        try {
+          const approvalService = require('./approvalService');
+          const progress = await approvalService.getApprovalProgress(expense.id);
+          
+          // Add simplified progress info to expense object
+          expense.approvalProgress = {
+            currentPercentage: progress.currentPercentage,
+            approvedCount: progress.approvedCount,
+            totalApprovers: progress.totalApprovers,
+            statusMessage: progress.statusMessage,
+            hasPercentageRule: progress.hasPercentageRule,
+            hasSpecificApproverRule: progress.hasSpecificApproverRule,
+            hasHybridRule: progress.hasHybridRule,
+            workflowName: progress.workflowName,
+            currentStep: progress.currentStep
+          };
+          
+          // Add percentage rule details if exists
+          if (progress.percentageRule) {
+            expense.approvalProgress.percentageRule = progress.percentageRule;
+          }
+          
+          // Add hybrid rule details if exists
+          if (progress.hybridRule) {
+            expense.approvalProgress.hybridRule = progress.hybridRule;
+          }
+          
+        } catch (error) {
+          console.error('Error getting approval progress for expense', expense.id, ':', error);
+          // Don't fail the entire request if progress can't be calculated
+          expense.approvalProgress = null;
+        }
+      }
+      return expense;
+    })
+  );
+
+  return expensesWithProgress;
 };
 
 /**
@@ -288,9 +335,11 @@ const updateExpense = async (expenseId, expenseData, userId, companyId, companyC
 };
 
 /**
- * Submit expense for approval
+ * Submit expense for approval (with workflow support)
  */
 const submitExpense = async (expenseId, userId, companyId) => {
+  const workflowService = require('./workflowService');
+  
   const expense = await query(
     'SELECT * FROM expenses WHERE id = $1 AND company_id = $2',
     [expenseId, companyId]
@@ -310,25 +359,41 @@ const submitExpense = async (expenseId, userId, companyId) => {
     throw new AppError('Expense has already been submitted', 400);
   }
 
-  // TODO: Create approval workflow based on approval rules
-  // For now, just update status to waiting_approval
-  
+  // Find appropriate workflow based on amount and rules
+  const workflow = await workflowService.getWorkflowForExpense(
+    companyId, 
+    exp.company_amount, 
+    exp.company_currency, 
+    exp.category_id
+  );
+
+  // Update expense status
   await query(
     `UPDATE expenses SET status = 'waiting_approval', submitted_at = NOW()
      WHERE id = $1`,
     [expenseId]
   );
 
+  if (workflow) {
+    // Start workflow process
+    console.log('ExpenseService: Starting workflow for expense:', expenseId, 'workflow:', workflow.name);
+    await workflowService.startWorkflow(expenseId, workflow.id);
+  } else {
+    // Fallback to simple approval (no workflow)
+    console.log('ExpenseService: No workflow found, using simple approval for expense:', expenseId);
+  }
+
   // Create audit log
   await query(
-    `INSERT INTO audit_logs (company_id, user_id, action, entity_type, entity_id)
-     VALUES ($1, $2, 'SUBMIT_EXPENSE', 'expense', $3)`,
-    [companyId, userId, expenseId.toString()]
+    `INSERT INTO audit_logs (company_id, user_id, action, entity_type, entity_id, details)
+     VALUES ($1, $2, 'SUBMIT_EXPENSE', 'expense', $3, $4)`,
+    [companyId, userId, expenseId.toString(), JSON.stringify({ workflow_id: workflow?.id, workflow_name: workflow?.name })]
   );
 
-  // TODO: Notify approvers
-
-  return { message: 'Expense submitted for approval' };
+  return { 
+    message: 'Expense submitted for approval',
+    workflow: workflow ? workflow.name : 'Simple Approval'
+  };
 };
 
 /**

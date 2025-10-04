@@ -14,8 +14,10 @@ import {
   Typography,
   Box,
   CircularProgress,
+  LinearProgress,
+  Tooltip,
 } from '@mui/material';
-import { MoreVert, Visibility, Edit, Delete, Send } from '@mui/icons-material';
+import { MoreVert, Visibility, Edit, Delete, Send, CheckCircle, Person, Group } from '@mui/icons-material';
 import { format } from 'date-fns';
 
 const getStatusColor = (status) => {
@@ -118,6 +120,7 @@ const ExpenseTable = ({ expenses, isLoading, onView, onEdit, onDelete, onSubmit 
               <TableCell>Amount</TableCell>
               <TableCell>Company Amount</TableCell>
               <TableCell>Status</TableCell>
+              <TableCell>Approval Progress</TableCell>
               <TableCell>Requester</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -150,6 +153,100 @@ const ExpenseTable = ({ expenses, isLoading, onView, onEdit, onDelete, onSubmit 
                     color={getStatusColor(expense.status)}
                     size="small"
                   />
+                </TableCell>
+                <TableCell>
+                  {expense.approvalProgress && (expense.status === 'waiting_approval' || expense.status === 'approved') ? (
+                    <Box sx={{ minWidth: 200 }}>
+                      {/* Percentage Progress Bar */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                        <Box sx={{ width: '100%', mr: 1 }}>
+                          <LinearProgress
+                            variant="determinate"
+                            value={expense.approvalProgress.currentPercentage}
+                            sx={{
+                              height: 6,
+                              borderRadius: 3,
+                              '& .MuiLinearProgress-bar': {
+                                backgroundColor: expense.approvalProgress.currentPercentage >= 60 ? '#4caf50' : '#ff9800'
+                              }
+                            }}
+                          />
+                        </Box>
+                        <Typography variant="caption" sx={{ minWidth: 35 }}>
+                          {expense.approvalProgress.currentPercentage}%
+                        </Typography>
+                      </Box>
+                      
+                      {/* Status Message */}
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                        {expense.approvalProgress.statusMessage}
+                      </Typography>
+                      
+                      {/* Rule Type Indicators */}
+                      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                        {expense.approvalProgress.hasPercentageRule && (
+                          <Tooltip title={`Percentage Rule: ${expense.approvalProgress.percentageRule?.required}% required`}>
+                            <Chip
+                              size="small"
+                              icon={<Group />}
+                              label={`${expense.approvalProgress.percentageRule?.required}%`}
+                              color={expense.approvalProgress.percentageRule?.satisfied ? 'success' : 'default'}
+                              variant="outlined"
+                              sx={{ fontSize: '0.7rem', height: 20 }}
+                            />
+                          </Tooltip>
+                        )}
+                        
+                        {expense.approvalProgress.hasSpecificApproverRule && (
+                          <Tooltip title="Specific Approver Rule">
+                            <Chip
+                              size="small"
+                              icon={<Person />}
+                              label="VIP"
+                              color={expense.approvalProgress.specificApproverRule?.hasApproved ? 'success' : 'default'}
+                              variant="outlined"
+                              sx={{ fontSize: '0.7rem', height: 20 }}
+                            />
+                          </Tooltip>
+                        )}
+                        
+                        {expense.approvalProgress.hasHybridRule && (
+                          <Tooltip title={`Hybrid Rule: ${expense.approvalProgress.hybridRule?.percentageRequired}% OR Specific Approver`}>
+                            <Chip
+                              size="small"
+                              icon={<CheckCircle />}
+                              label="Hybrid"
+                              color={expense.approvalProgress.hybridRule?.overallSatisfied ? 'success' : 'default'}
+                              variant="outlined"
+                              sx={{ fontSize: '0.7rem', height: 20 }}
+                            />
+                          </Tooltip>
+                        )}
+                      </Box>
+                      
+                      {/* Approver Count */}
+                      <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 0.5 }}>
+                        {expense.approvalProgress.approvedCount}/{expense.approvalProgress.totalApprovers} approved
+                      </Typography>
+                    </Box>
+                  ) : expense.status === 'draft' ? (
+                    <Typography variant="caption" color="text.secondary">
+                      Not submitted
+                    </Typography>
+                  ) : expense.status === 'approved' ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', color: 'success.main' }}>
+                      <CheckCircle fontSize="small" sx={{ mr: 0.5 }} />
+                      <Typography variant="caption">Fully Approved</Typography>
+                    </Box>
+                  ) : expense.status === 'rejected' ? (
+                    <Typography variant="caption" color="error">
+                      Rejected
+                    </Typography>
+                  ) : (
+                    <Typography variant="caption" color="text.secondary">
+                      —
+                    </Typography>
+                  )}
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2">{expense.requester_name}</Typography>

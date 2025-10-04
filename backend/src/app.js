@@ -13,6 +13,7 @@ const approvalRoutes = require('./routes/approvalRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const workflowRoutes = require('./routes/workflowRoutes');
 
 // Import middlewares
 const { errorHandler } = require('./middlewares/errorHandler');
@@ -61,6 +62,7 @@ app.use('/api/approvals', approvalRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/workflows', workflowRoutes);
 
 // 404 handler
 app.use(notFound);
