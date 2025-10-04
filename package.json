@@ -1,0 +1,16 @@
+{
+  "name": "expensely",
+  "version": "1.0.0",
+  "description": "A comprehensive expense management system with configurable multi-level approval workflows, OCR receipt scanning, and multi-currency support.",
+  "main": "test-approval-system.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.12.2"
+  }
+}
