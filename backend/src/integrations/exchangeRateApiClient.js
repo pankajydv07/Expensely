@@ -18,15 +18,23 @@ const fetchExchangeRates = async (baseCurrency) => {
     }
 
     // Fetch from API
+    console.log(`🌐 Exchange Rate: Fetching rates for ${baseCurrency} from ${API_URL}/${baseCurrency}`);
     const response = await axios.get(`${API_URL}/${baseCurrency}`);
     const rates = response.data.rates;
 
+    console.log(`✅ Exchange Rate: Successfully fetched ${Object.keys(rates).length} rates`);
+    
     // Cache the rates
     await cacheRates(baseCurrency, rates);
 
     return rates;
   } catch (error) {
-    console.error('Error fetching exchange rates:', error.message);
+    console.error('❌ Exchange Rate Error:', error.message);
+    console.error('📋 Exchange Rate Error Details:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      url: `${API_URL}/${baseCurrency}`
+    });
     
     // Return fallback rates if API fails
     return getFallbackRates(baseCurrency);

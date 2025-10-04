@@ -60,9 +60,9 @@ export const createExpense = createAsyncThunk(
 
 export const updateExpense = createAsyncThunk(
   'expenses/updateExpense',
-  async ({ id, expenseData }, { rejectWithValue }) => {
+  async ({ id, data }, { rejectWithValue }) => {
     try {
-      const response = await expenseService.updateExpense(id, expenseData);
+      const response = await expenseService.updateExpense(id, data);
       return response.data;
     } catch (error) {
       return rejectWithValue(

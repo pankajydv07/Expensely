@@ -24,6 +24,7 @@ import {
 import { CloudUpload, Close, Description, Add } from '@mui/icons-material';
 import { fetchCategories } from '../../store/expenseSlice';
 import * as categoryService from '../../services/categoryService';
+import expenseService from '../../services/expenseService';
 
 const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Expense' }) => {
   const dispatch = useDispatch();
@@ -45,6 +46,14 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [ocrProcessing, setOcrProcessing] = useState(false);
+  
+  // Entry Mode Selection states
+  const [entryMode, setEntryMode] = useState(null); // null, 'ocr', 'manual'
+  const [showModeSelection, setShowModeSelection] = useState(!initialData);
+  
+  // OCR Preview states
+  const [ocrData, setOcrData] = useState(null);
+  const [showOcrPreview, setShowOcrPreview] = useState(false);
   
   // Add Category Modal states
   const [showAddCategory, setShowAddCategory] = useState(false);
@@ -75,6 +84,9 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
   // Populate form with initial data (for editing)
   useEffect(() => {
     if (initialData) {
+      console.log('ExpenseForm: Initializing with data:', initialData);
+      console.log('ExpenseForm: Setting currency to:', initialData.original_currency || 'USD');
+      
       setFormData({
         title: initialData.title || '',
         description: initialData.description || '',
@@ -84,6 +96,10 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
         category_id: initialData.category_id || '',
         receipt_file: null,
       });
+      
+      // For editing, use manual mode
+      setEntryMode('manual');
+      setShowModeSelection(false);
       
       // If there's an existing receipt URL, show it
       if (initialData.receipt_url) {
@@ -95,6 +111,11 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     console.log('ExpenseForm: Input changed -', name, '=', value, typeof value);
+    
+    // Special handling for currency changes
+    if (name === 'original_currency') {
+      console.log('ExpenseForm: Currency changed from', formData.original_currency, 'to', value);
+    }
     
     // Convert category_id to number for proper matching
     const processedValue = name === 'category_id' ? (value === '' ? '' : Number(value)) : value;
@@ -115,6 +136,7 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
+    console.log('📁 File selected:', file ? file.name : 'No file', 'Entry mode:', entryMode);
     if (!file) return;
 
     // Validate file type
@@ -153,36 +175,74 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
       setReceiptPreview('pdf');
     }
 
-    // Clear any previous file errors
-    setErrors((prev) => ({
-      ...prev,
-      receipt_file: null,
-    }));
+    // Clear any previous file errors and OCR messages
+    setErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors.receipt_file;
+      delete newErrors.ocr_success;
+      delete newErrors.ocr_warning;
+      delete newErrors.ocr_error;
+      return newErrors;
+    });
 
-    // Optionally trigger OCR processing
-    if (file.type.startsWith('image/')) {
+    // Trigger OCR processing in OCR mode for both images and PDFs
+    if (entryMode === 'ocr' && (file.type.startsWith('image/') || file.type === 'application/pdf')) {
+      console.log('✅ OCR conditions met, starting processing...');
       await processOCR(file);
+    } else {
+      console.log('❌ OCR not triggered. Mode:', entryMode, 'File type:', file.type);
     }
   };
 
   const processOCR = async (file) => {
+    console.log('🔍 Starting OCR processing for:', file.name, 'Type:', file.type, 'Mode:', entryMode);
     setOcrProcessing(true);
     try {
-      // TODO: Implement OCR API call
-      // const formData = new FormData();
-      // formData.append('receipt', file);
-      // const response = await api.post('/ocr/extract', formData);
-      // 
-      // setFormData((prev) => ({
-      //   ...prev,
-      //   original_amount: response.data.amount || prev.original_amount,
-      //   date_of_expense: response.data.date || prev.date_of_expense,
-      //   description: response.data.description || prev.description,
-      // }));
+      console.log('🔍 Processing receipt with OCR:', file.name);
       
-      console.log('OCR processing would happen here with file:', file.name);
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('receipt', file);
+      
+      console.log('📤 Calling OCR API...');
+      // Call the OCR API
+      const response = await expenseService.uploadReceipt(formData);
+      
+      if (response.success && response.data.ocrData) {
+        const extractedData = response.data.ocrData;
+        
+        console.log('✅ OCR processing successful:', extractedData);
+        
+        if (entryMode === 'ocr') {
+          // In OCR mode, show preview first
+          setOcrData(extractedData);
+          setShowOcrPreview(true);
+
+          // Show success message with confidence
+          if (extractedData.confidence && extractedData.confidence > 60) {
+            setErrors(prev => ({
+              ...prev,
+              ocr_success: `Receipt processed successfully! Confidence: ${extractedData.confidence}%. Review the extracted data below.`
+            }));
+          } else {
+            setErrors(prev => ({
+              ...prev,
+              ocr_warning: `Receipt processed with ${extractedData.confidence}% confidence. Please verify the extracted data below.`
+            }));
+          }
+        } else {
+          // In manual mode (shouldn't happen), just store the data
+          setOcrData(extractedData);
+        }
+      } else {
+        throw new Error(response.error || 'OCR processing failed');
+      }
     } catch (error) {
-      console.error('OCR processing failed:', error);
+      console.error('❌ OCR processing failed:', error);
+      setErrors(prev => ({
+        ...prev,
+        ocr_error: `OCR processing failed: ${error.message}. Please enter details manually.`
+      }));
     } finally {
       setOcrProcessing(false);
     }
@@ -194,6 +254,101 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
       receipt_file: null,
     }));
     setReceiptPreview(null);
+    setOcrData(null);
+    setShowOcrPreview(false);
+  };
+
+  const handleAcceptOcrData = () => {
+    if (!ocrData) return;
+
+    // Update form with extracted data
+    setFormData((prev) => ({
+      ...prev,
+      original_amount: ocrData.amount?.toString() || prev.original_amount,
+      date_of_expense: ocrData.date || prev.date_of_expense,
+      description: ocrData.description || prev.description,
+      title: ocrData.merchant ? `Expense from ${ocrData.merchant}` : (ocrData.description || prev.title),
+      original_currency: ocrData.currency || prev.original_currency,
+      // Try to match category name with existing categories
+      category_name: ocrData.category || prev.category_name,
+    }));
+
+    // Try to match category with existing categories
+    if (ocrData.category && categories.length > 0) {
+      const matchingCategory = categories.find(cat => 
+        cat.name.toLowerCase().includes(ocrData.category.toLowerCase()) ||
+        ocrData.category.toLowerCase().includes(cat.name.toLowerCase())
+      );
+      if (matchingCategory) {
+        setFormData(prev => ({
+          ...prev,
+          category_id: matchingCategory.id,
+          category_name: ''
+        }));
+      }
+    }
+
+    // Hide OCR preview
+    setShowOcrPreview(false);
+    
+    // Clear OCR success/warning messages since data is now accepted
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors.ocr_success;
+      delete newErrors.ocr_warning;
+      return newErrors;
+    });
+
+    // Show success message
+    setErrors(prev => ({
+      ...prev,
+      form_success: 'Form has been auto-filled with extracted data. Please review and submit.'
+    }));
+  };
+
+  const handleRejectOcrData = () => {
+    // Hide OCR preview but keep the receipt
+    setShowOcrPreview(false);
+    setOcrData(null);
+    
+    // Clear OCR messages
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors.ocr_success;
+      delete newErrors.ocr_warning;
+      return newErrors;
+    });
+  };
+
+  const handleModeSelection = (mode) => {
+    setEntryMode(mode);
+    setShowModeSelection(false);
+    
+    if (mode === 'manual') {
+      // For manual mode, hide OCR-related elements
+      setShowOcrPreview(false);
+      setOcrData(null);
+    }
+  };
+
+  const handleBackToModeSelection = () => {
+    setEntryMode(null);
+    setShowModeSelection(true);
+    // Reset form and OCR states
+    setFormData({
+      title: '',
+      description: '',
+      date_of_expense: new Date().toISOString().split('T')[0],
+      original_amount: '',
+      original_currency: 'USD',
+      category_id: '',
+      category_name: '',
+      receipt_file: null,
+    });
+    setReceiptPreview(null);
+    setOcrData(null);
+    setShowOcrPreview(false);
+    setErrors({});
   };
 
   const handleAddCategory = async () => {
@@ -317,8 +472,97 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
 
   return (
     <Paper sx={{ p: 3 }}>
-      <Box component="form" onSubmit={handleSubmit} noValidate>
-        <Grid container spacing={3}>
+      {/* Entry Mode Selection */}
+      {showModeSelection && (
+        <Box sx={{ textAlign: 'center', py: 4 }}>
+          <Typography variant="h5" gutterBottom>
+            Create New Expense
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+            Choose how you want to add your expense:
+          </Typography>
+          
+          <Grid container spacing={3} justifyContent="center">
+            <Grid item xs={12} sm={6} md={4}>
+              <Paper 
+                sx={{ 
+                  p: 3, 
+                  cursor: 'pointer', 
+                  border: '2px solid transparent',
+                  '&:hover': { 
+                    border: '2px solid',
+                    borderColor: 'primary.main',
+                    bgcolor: 'primary.50'
+                  }
+                }}
+                onClick={() => handleModeSelection('ocr')}
+              >
+                <CloudUpload sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  Upload Receipt (OCR)
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Upload a receipt and let AI extract the details automatically
+                </Typography>
+              </Paper>
+            </Grid>
+            
+            <Grid item xs={12} sm={6} md={4}>
+              <Paper 
+                sx={{ 
+                  p: 3, 
+                  cursor: 'pointer', 
+                  border: '2px solid transparent',
+                  '&:hover': { 
+                    border: '2px solid',
+                    borderColor: 'primary.main',
+                    bgcolor: 'primary.50'
+                  }
+                }}
+                onClick={() => handleModeSelection('manual')}
+              >
+                <Add sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  Manual Entry
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Enter expense details manually without uploading a receipt
+                </Typography>
+              </Paper>
+            </Grid>
+          </Grid>
+        </Box>
+      )}
+
+      {/* Expense Form */}
+      {!showModeSelection && (
+        <Box component="form" onSubmit={handleSubmit} noValidate>
+          {/* Back Button */}
+          <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Button
+              variant="text"
+              onClick={handleBackToModeSelection}
+              startIcon={<Close />}
+              size="small"
+            >
+              Back to Mode Selection
+            </Button>
+            <Typography variant="h6" color="primary">
+              {entryMode === 'ocr' ? '📄 OCR Entry' : '✏️ Manual Entry'}
+            </Typography>
+          </Box>
+
+          <Grid container spacing={3}>
+          
+          {/* Success Message */}
+          {errors.form_success && (
+            <Grid item xs={12}>
+              <Alert severity="success" onClose={() => setErrors(prev => ({ ...prev, form_success: null }))}>
+                {errors.form_success}
+              </Alert>
+            </Grid>
+          )}
+
           {/* Title */}
           <Grid item xs={12}>
             <TextField
@@ -464,12 +708,13 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
             </FormControl>
           </Grid>
 
-          {/* Receipt Upload */}
-          <Grid item xs={12}>
-            <Box>
-              <Typography variant="subtitle2" gutterBottom>
-                Receipt
-              </Typography>
+          {/* Receipt Upload - Only show in OCR mode */}
+          {entryMode === 'ocr' && (
+            <Grid item xs={12}>
+              <Box>
+                <Typography variant="subtitle2" gutterBottom>
+                  Receipt
+                </Typography>
               
               {!receiptPreview ? (
                 <Button
@@ -479,7 +724,7 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
                   fullWidth
                   sx={{ py: 2 }}
                 >
-                  Upload Receipt
+                  Attach Receipt
                   <input
                     type="file"
                     hidden
@@ -540,6 +785,24 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
                 </Alert>
               )}
 
+              {errors.ocr_success && (
+                <Alert severity="success" sx={{ mt: 1 }}>
+                  {errors.ocr_success}
+                </Alert>
+              )}
+
+              {errors.ocr_warning && (
+                <Alert severity="warning" sx={{ mt: 1 }}>
+                  {errors.ocr_warning}
+                </Alert>
+              )}
+
+              {errors.ocr_error && (
+                <Alert severity="error" sx={{ mt: 1 }}>
+                  {errors.ocr_error}
+                </Alert>
+              )}
+
               {errors.receipt_file && (
                 <Alert severity="error" sx={{ mt: 1 }}>
                   {errors.receipt_file}
@@ -551,6 +814,100 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
               </Typography>
             </Box>
           </Grid>
+          )}
+
+          {/* OCR Preview Card - Only show in OCR mode */}
+          {entryMode === 'ocr' && showOcrPreview && ocrData && (
+            <Grid item xs={12}>
+              <Paper sx={{ p: 3, border: '2px solid', borderColor: 'primary.main', bgcolor: 'primary.50' }}>
+                <Typography variant="h6" gutterBottom color="primary">
+                  📄 Receipt Data Extracted
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Review the automatically extracted information from your receipt:
+                </Typography>
+                
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                  <Grid item xs={12} sm={6}>
+                    <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Amount
+                      </Typography>
+                      <Typography variant="h6">
+                        {ocrData.currency || 'USD'} {ocrData.amount || 'N/A'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Date
+                      </Typography>
+                      <Typography variant="h6">
+                        {ocrData.date || 'N/A'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Merchant
+                      </Typography>
+                      <Typography variant="h6">
+                        {ocrData.merchant || 'N/A'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Category
+                      </Typography>
+                      <Typography variant="h6">
+                        {ocrData.category || 'N/A'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  {ocrData.description && (
+                    <Grid item xs={12}>
+                      <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+                        <Typography variant="subtitle2" color="text.secondary">
+                          Description
+                        </Typography>
+                        <Typography variant="body1">
+                          {ocrData.description}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  )}
+                </Grid>
+
+                <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={handleAcceptOcrData}
+                    sx={{ minWidth: 120 }}
+                  >
+                    Accept & Fill Form
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={handleRejectOcrData}
+                    sx={{ minWidth: 120 }}
+                  >
+                    Enter Manually
+                  </Button>
+                </Box>
+
+                {ocrData.confidence && (
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ textAlign: 'center', mt: 1 }}>
+                    Confidence: {ocrData.confidence}%
+                  </Typography>
+                )}
+              </Paper>
+            </Grid>
+          )}
 
           {/* Action Buttons */}
           <Grid item xs={12}>
@@ -564,15 +921,26 @@ const ExpenseForm = ({ initialData, onSubmit, onCancel, submitLabel = 'Create Ex
               <Button
                 type="submit"
                 variant="contained"
-                disabled={isSubmitting || ocrProcessing}
+                disabled={isSubmitting || ocrProcessing || showOcrPreview}
                 startIcon={isSubmitting && <CircularProgress size={20} />}
               >
-                {isSubmitting ? 'Saving...' : submitLabel}
+                {showOcrPreview 
+                  ? 'Review OCR Data Above'
+                  : isSubmitting 
+                    ? 'Saving...' 
+                    : submitLabel
+                }
               </Button>
             </Box>
+            {showOcrPreview && (
+              <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', mt: 1, display: 'block' }}>
+                Please review and accept/reject the extracted data before creating the expense
+              </Typography>
+            )}
           </Grid>
-        </Grid>
-      </Box>
+          </Grid>
+        </Box>
+      )}
 
       {/* Add Category Modal */}
       <Dialog 

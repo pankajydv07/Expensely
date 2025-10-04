@@ -129,6 +129,8 @@ const createExpense = asyncHandler(async (req, res, next) => {
  * @access  Private
  */
 const updateExpense = asyncHandler(async (req, res, next) => {
+  console.log('🔄 Update Expense: Raw request body:', req.body);
+
   // Get company currency
   const companyResult = await query(
     'SELECT default_currency FROM companies WHERE id = $1',
@@ -137,9 +139,32 @@ const updateExpense = asyncHandler(async (req, res, next) => {
 
   const companyCurrency = companyResult.rows[0].default_currency;
 
+  // Parse and convert form data fields to match service expectations (same as create)
+  const formData = {
+    title: req.body.title,
+    categoryId: req.body.category_id ? parseInt(req.body.category_id) : null,
+    categoryName: req.body.category_name,
+    originalAmount: req.body.original_amount ? parseFloat(req.body.original_amount) : null,
+    originalCurrency: req.body.original_currency || 'USD',
+    dateOfExpense: req.body.date_of_expense,
+    paymentMethod: req.body.payment_method,
+    vendor: req.body.vendor,
+    description: req.body.description,
+  };
+
+  console.log('🔄 Update Expense: Parsed form data:', formData);
+
+  // Validation - same as create
+  if (!formData.originalAmount || formData.originalAmount <= 0 || isNaN(formData.originalAmount)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Valid amount is required'
+    });
+  }
+
   const expense = await expenseService.updateExpense(
     req.params.id,
-    req.body,
+    formData,
     req.user.id,
     req.user.company_id,
     companyCurrency
