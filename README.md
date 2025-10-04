@@ -2,6 +2,12 @@
 
 Team name : Zenith Zero
 Team leader : Ujjawal pandey
+Team Member 1 : Pankaj Yadav
+Team Member 2 : Rashi Agrawal
+
+Problem Statement Name : Expense Tracker
+Reviewer Name : Aman Patel
+Video Pressentation Link :
 
 A comprehensive expense management system with configurable multi-level approval workflows, OCR receipt scanning, and multi-currency support.
 
