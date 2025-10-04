@@ -1,7 +1,7 @@
 # Expensely - Expense Management System
 
 #Team name : Zenith Zero
-#Team leader : Ujjawal pandey
+\n Team leader : Ujjawal pandey
 #Team Member 1 : Pankaj Yadav
 #Team Member 2 : Rashi Agrawal
 
